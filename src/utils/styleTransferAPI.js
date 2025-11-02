@@ -1,4 +1,4 @@
-// Prompt-based style transfer using SDXL img2img
+// FLUX ControlNet style transfer with high-quality prompts
 
 const fileToBase64 = async (file) => {
   return new Promise((resolve, reject) => {
@@ -9,7 +9,7 @@ const fileToBase64 = async (file) => {
   });
 };
 
-const resizeImage = async (file, maxWidth = 768) => {
+const resizeImage = async (file, maxWidth = 1024) => {
   return new Promise((resolve) => {
     const img = new Image();
     const canvas = document.createElement('canvas');
@@ -30,7 +30,7 @@ const resizeImage = async (file, maxWidth = 768) => {
       
       canvas.toBlob((blob) => {
         resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.9);
+      }, 'image/jpeg', 0.95);
     };
     
     img.src = URL.createObjectURL(file);
@@ -39,38 +39,59 @@ const resizeImage = async (file, maxWidth = 768) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// 화풍 프롬프트 생성
-const createStylePrompt = (artwork) => {
+// 고품질 화풍 프롬프트 생성
+const createArtisticPrompt = (artwork) => {
   const artist = artwork.artistEn || artwork.artist;
   const style = artwork.style;
   
-  // 스타일별 키워드
-  const styleKeywords = {
-    'impressionism': 'impressionist painting, visible brushstrokes, light and color, outdoor scene',
-    'expressionism': 'expressionist painting, bold colors, emotional, distorted forms',
-    'cubism': 'cubist painting, geometric shapes, fragmented, multiple perspectives',
-    'surrealism': 'surrealist painting, dreamlike, imaginative, symbolic',
-    'romanticism': 'romantic painting, dramatic lighting, emotional atmosphere',
-    'baroque': 'baroque painting, dramatic lighting, rich colors, ornate details',
-    'renaissance': 'renaissance painting, realistic, balanced composition, classical beauty',
-    'fauvism': 'fauvist painting, wild colors, bold brushstrokes, simplified forms',
-    'rococo': 'rococo painting, ornate, pastel colors, playful, elegant'
+  // 화가별 상세 스타일 키워드
+  const artistPrompts = {
+    // 인상주의
+    'Claude Monet': 'soft brushstrokes, dappled light, vibrant colors, outdoor atmosphere, impressionist painting style',
+    'Pierre-Auguste Renoir': 'warm tones, soft focus, luminous skin, joyful atmosphere, impressionist portrait style',
+    'Edgar Degas': 'dynamic composition, ballet dancers, indoor lighting, pastel colors, impressionist scene',
+    
+    // 표현주의
+    'Edvard Munch': 'emotional intensity, swirling forms, dramatic colors, expressionist painting style',
+    'Egon Schiele': 'angular lines, emotional depth, expressive gestures, expressionist portrait style',
+    
+    // 후기인상주의
+    'Vincent van Gogh': 'thick impasto brushstrokes, swirling patterns, vibrant colors, emotional intensity, post-impressionist style',
+    'Paul Cézanne': 'geometric forms, structured composition, muted colors, post-impressionist style',
+    
+    // 야수주의
+    'Henri Matisse': 'bold colors, simplified forms, decorative patterns, fauvist painting style',
+    
+    // 입체주의
+    'Pablo Picasso': 'fragmented forms, multiple perspectives, geometric shapes, cubist painting style'
   };
   
-  const baseStyle = styleKeywords[style] || 'artistic painting style';
+  // 스타일별 기본 키워드
+  const styleKeywords = {
+    'impressionism': 'soft brushstrokes, natural light, outdoor scene, vibrant colors',
+    'expressionism': 'emotional expression, bold colors, distorted forms, dramatic mood',
+    'fauvism': 'wild colors, simplified forms, bold brushwork',
+    'cubism': 'geometric shapes, fragmented perspective, angular forms',
+    'surrealism': 'dreamlike quality, imaginative elements, surreal atmosphere',
+    'romanticism': 'dramatic lighting, emotional atmosphere, sublime beauty',
+    'baroque': 'dramatic chiaroscuro, rich colors, ornate details',
+    'renaissance': 'realistic proportions, balanced composition, classical beauty'
+  };
   
-  return `A painting in the style of ${artist}, ${baseStyle}, masterpiece, high quality, artistic`;
+  const artistStyle = artistPrompts[artist] || styleKeywords[style] || 'artistic painting style';
+  
+  return `A beautiful painting in the style of ${artist}, ${artistStyle}, masterpiece, high quality, professional artwork, detailed, artistic interpretation`;
 };
 
-// SDXL로 스타일 변환
+// FLUX ControlNet으로 스타일 변환
 export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
   try {
-    const resizedPhoto = await resizeImage(photoFile, 768);
+    const resizedPhoto = await resizeImage(photoFile, 1024);
     const photoBase64 = await fileToBase64(resizedPhoto);
     
-    const prompt = createStylePrompt(artwork);
+    const prompt = createArtisticPrompt(artwork);
     
-    if (onProgress) onProgress('서버에 요청 중...');
+    if (onProgress) onProgress('AI 처리 준비 중...');
     
     // Serverless function 호출
     const createResponse = await fetch('/api/replicate', {
@@ -80,22 +101,25 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
       },
       body: JSON.stringify({
         image: photoBase64,
-        prompt: prompt
+        prompt: prompt,
+        style: artwork.style
       })
     });
     
     if (!createResponse.ok) {
+      const errorText = await createResponse.text();
+      console.error('Server error:', errorText);
       throw new Error(`Server error: ${createResponse.status}`);
     }
     
     const prediction = await createResponse.json();
     
-    if (onProgress) onProgress('그림 생성 중...');
+    if (onProgress) onProgress('고품질 그림 생성 중...');
     
     // 결과 polling
     let result = prediction;
     let attempts = 0;
-    const maxAttempts = 60;
+    const maxAttempts = 90; // FLUX는 더 오래 걸림
     
     while (result.status !== 'succeeded' && result.status !== 'failed' && attempts < maxAttempts) {
       await sleep(2000);
@@ -110,7 +134,7 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
       result = await checkResponse.json();
       
       if (onProgress) {
-        const progress = Math.min(95, 10 + (attempts * 1.5));
+        const progress = Math.min(95, 5 + (attempts * 1.0));
         onProgress(`생성 중... ${Math.floor(progress)}%`);
       }
     }

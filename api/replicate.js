@@ -15,13 +15,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { image, prompt } = req.body;
+    const { image, prompt, style } = req.body;
 
     if (!image || !prompt) {
       return res.status(400).json({ error: 'Missing image or prompt' });
     }
 
-    // Replicate SDXL img2img API 호출
+    // FLUX ControlNet API 호출
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -29,14 +29,15 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        version: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b", // SDXL img2img
+        version: "bb0da9f3aaaa357c0cc82e2002c2e8f88ee4c81e3c9cf21d8acbfeb8c86ea0a2", // FLUX dev ControlNet
         input: {
-          image: image,
+          control_image: image,
           prompt: prompt,
-          strength: 0.75,
-          num_inference_steps: 30,
-          guidance_scale: 7.5,
-          scheduler: "K_EULER"
+          control_strength: 0.5,
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
+          output_format: "jpg",
+          output_quality: 90
         }
       })
     });
