@@ -1,4 +1,5 @@
-// FLUX ControlNet style transfer with high-quality prompts
+// v16: XLabs FLUX Depth ControlNet with optimized prompts
+// 깊이 정보 기반으로 사진 구조를 완벽하게 유지하면서 화풍만 변경
 
 const fileToBase64 = async (file) => {
   return new Promise((resolve, reject) => {
@@ -39,61 +40,141 @@ const resizeImage = async (file, maxWidth = 1024) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// 고품질 화풍 프롬프트 생성
-const createArtisticPrompt = (artwork) => {
+// v16: Depth ControlNet 최적화 프롬프트
+// Depth 컨트롤은 3차원 구조를 유지하므로 프롬프트에서 이를 강조
+const createDepthArtisticPrompt = (artwork) => {
   const artist = artwork.artistEn || artwork.artist;
   const style = artwork.style;
   
-  // 화가별 상세 스타일 키워드
+  // 화가별 Depth-optimized 프롬프트
   const artistPrompts = {
-    // 인상주의
-    'Claude Monet': 'soft brushstrokes, dappled light, vibrant colors, outdoor atmosphere, impressionist painting style',
-    'Pierre-Auguste Renoir': 'warm tones, soft focus, luminous skin, joyful atmosphere, impressionist portrait style',
-    'Edgar Degas': 'dynamic composition, ballet dancers, indoor lighting, pastel colors, impressionist scene',
+    // 인상주의 - 빛과 대기 표현
+    'Claude Monet': 
+      'soft impressionist brushstrokes, dappled natural light, ' +
+      'vibrant outdoor colors, atmospheric perspective, ' +
+      'maintaining depth and composition, plein-air painting style',
     
-    // 표현주의
-    'Edvard Munch': 'emotional intensity, swirling forms, dramatic colors, expressionist painting style',
-    'Egon Schiele': 'angular lines, emotional depth, expressive gestures, expressionist portrait style',
+    'Pierre-Auguste Renoir': 
+      'warm luminous tones, soft focus effects, ' +
+      'joyful atmosphere with natural lighting, ' +
+      'preserving spatial relationships, impressionist portrait style',
     
-    // 후기인상주의
-    'Vincent van Gogh': 'thick impasto brushstrokes, swirling patterns, vibrant colors, emotional intensity, post-impressionist style',
-    'Paul Cézanne': 'geometric forms, structured composition, muted colors, post-impressionist style',
+    'Edgar Degas': 
+      'dynamic composition, ballet scene aesthetics, ' +
+      'indoor natural lighting, pastel color palette, ' +
+      'maintaining depth and movement, impressionist style',
     
-    // 야수주의
-    'Henri Matisse': 'bold colors, simplified forms, decorative patterns, fauvist painting style',
+    // 표현주의 - 감정과 형태
+    'Edvard Munch': 
+      'expressive emotional brushstrokes, swirling undulating forms, ' +
+      'dramatic color palette, psychological intensity, ' +
+      'preserving original depth structure, expressionist masterpiece',
     
-    // 입체주의
-    'Pablo Picasso': 'fragmented forms, multiple perspectives, geometric shapes, cubist painting style'
+    'Egon Schiele': 
+      'angular expressive lines, emotional psychological depth, ' +
+      'expressive gestures and poses, muted earth tones, ' +
+      'maintaining composition, expressionist portrait style',
+    
+    // 후기인상주의 - 구조와 감정
+    'Vincent van Gogh': 
+      'thick impasto oil paint texture, swirling dynamic brushwork, ' +
+      'vibrant colors with emotional intensity, ' +
+      'preserving subject positioning and depth, post-impressionist masterpiece',
+    
+    'Paul Cézanne': 
+      'geometric structured forms, balanced composition, ' +
+      'muted natural colors, architectural perspective, ' +
+      'maintaining spatial depth, post-impressionist style',
+    
+    'Paul Gauguin':
+      'bold flat color areas, decorative patterns, ' +
+      'exotic tropical atmosphere, simplified forms, ' +
+      'preserving composition, post-impressionist style',
+    
+    // 야수주의 - 색채 표현
+    'Henri Matisse': 
+      'bold vibrant colors, simplified decorative forms, ' +
+      'ornate patterns and shapes, joyful composition, ' +
+      'maintaining original structure, fauvist painting style',
+    
+    // 입체주의 - 다시점 표현
+    'Pablo Picasso': 
+      'geometric fragmented forms, analytical multiple perspectives, ' +
+      'cubist angular shapes, earth tone palette, ' +
+      'maintaining recognizable subject with multiple angles, modernist masterpiece',
+    
+    // 아르누보/상징주의
+    'Gustav Klimt':
+      'ornate decorative patterns, gold leaf symbolic details, ' +
+      'art nouveau elegance, Byzantine influences, ' +
+      'preserving subject and depth, Vienna Secession style',
+    
+    // 상징주의
+    'Odilon Redon':
+      'dreamlike symbolic imagery, mystical atmosphere, ' +
+      'soft pastel colors, spiritual depth, ' +
+      'maintaining composition, symbolist style'
   };
   
-  // 스타일별 기본 키워드
+  // 스타일별 기본 Depth-aware 키워드
   const styleKeywords = {
-    'impressionism': 'soft brushstrokes, natural light, outdoor scene, vibrant colors',
-    'expressionism': 'emotional expression, bold colors, distorted forms, dramatic mood',
-    'fauvism': 'wild colors, simplified forms, bold brushwork',
-    'cubism': 'geometric shapes, fragmented perspective, angular forms',
-    'surrealism': 'dreamlike quality, imaginative elements, surreal atmosphere',
-    'romanticism': 'dramatic lighting, emotional atmosphere, sublime beauty',
-    'baroque': 'dramatic chiaroscuro, rich colors, ornate details',
-    'renaissance': 'realistic proportions, balanced composition, classical beauty'
+    'impressionism': 
+      'soft brushstrokes, natural dappled light, outdoor atmosphere, ' +
+      'atmospheric perspective, maintaining spatial depth',
+    
+    'expressionism': 
+      'emotional bold expression, dramatic colors, expressive forms, ' +
+      'psychological intensity, preserving composition',
+    
+    'fauvism': 
+      'wild vibrant colors, simplified bold forms, decorative patterns, ' +
+      'maintaining structure, fauvist style',
+    
+    'cubism': 
+      'geometric fragmented shapes, multiple perspectives, angular forms, ' +
+      'preserving recognizable subject, cubist analysis',
+    
+    'surrealism': 
+      'dreamlike quality, imaginative elements, surreal atmosphere, ' +
+      'maintaining depth relationships, surrealist style',
+    
+    'romanticism': 
+      'dramatic lighting, emotional sublime atmosphere, heroic beauty, ' +
+      'preserving spatial composition, romantic style',
+    
+    'baroque': 
+      'dramatic chiaroscuro, rich vibrant colors, ornate details, ' +
+      'maintaining depth and drama, baroque style',
+    
+    'renaissance': 
+      'realistic proportions, balanced harmonious composition, classical beauty, ' +
+      'preserving spatial relationships, renaissance style'
   };
   
-  const artistStyle = artistPrompts[artist] || styleKeywords[style] || 'artistic painting style';
+  const artistStyle = artistPrompts[artist] || styleKeywords[style] || 
+    'artistic painting style, maintaining original composition and depth';
   
-  return `A beautiful painting in the style of ${artist}, ${artistStyle}, masterpiece, high quality, professional artwork, detailed, artistic interpretation`;
+  // Depth ControlNet에 최적화된 최종 프롬프트
+  return `A beautiful high-quality painting in the style of ${artist}, ` +
+    `${artistStyle}, ` +
+    `photorealistic interpretation, ` +
+    `preserving facial features and spatial relationships, ` +
+    `masterpiece quality, detailed artistic rendering`;
 };
 
-// FLUX ControlNet으로 스타일 변환
+// v16: XLabs FLUX Depth ControlNet으로 스타일 변환
 export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
   try {
+    // 1024x1024로 리사이즈 (XLabs 모델 최적 해상도)
     const resizedPhoto = await resizeImage(photoFile, 1024);
     const photoBase64 = await fileToBase64(resizedPhoto);
     
-    const prompt = createArtisticPrompt(artwork);
+    // Depth-optimized 프롬프트 생성
+    const prompt = createDepthArtisticPrompt(artwork);
     
-    if (onProgress) onProgress('AI 처리 준비 중...');
+    if (onProgress) onProgress('AI 분석 중...');
     
-    // Serverless function 호출
+    // v16 Serverless function 호출
     const createResponse = await fetch('/api/replicate', {
       method: 'POST',
       headers: {
@@ -114,15 +195,15 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
     
     const prediction = await createResponse.json();
     
-    if (onProgress) onProgress('고품질 그림 생성 중...');
+    if (onProgress) onProgress('고품질 예술 작품 생성 중...');
     
-    // 결과 polling
+    // 결과 polling (XLabs는 약 54초 소요)
     let result = prediction;
     let attempts = 0;
-    const maxAttempts = 90; // FLUX는 더 오래 걸림
+    const maxAttempts = 90; // 최대 3분
     
     while (result.status !== 'succeeded' && result.status !== 'failed' && attempts < maxAttempts) {
-      await sleep(2000);
+      await sleep(2000); // 2초마다 확인
       attempts++;
       
       const checkResponse = await fetch(`/api/check-prediction?id=${prediction.id}`);
@@ -134,8 +215,8 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
       result = await checkResponse.json();
       
       if (onProgress) {
-        const progress = Math.min(95, 5 + (attempts * 1.0));
-        onProgress(`생성 중... ${Math.floor(progress)}%`);
+        const progress = Math.min(95, 10 + (attempts * 1.0));
+        onProgress(`예술 작품 생성 중... ${Math.floor(progress)}%`);
       }
     }
     
@@ -174,7 +255,7 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
   }
 };
 
-// Mock (테스트용)
+// Mock (무료 티어용)
 export const mockStyleTransfer = async (photoFile, onProgress) => {
   return new Promise((resolve) => {
     let progress = 0;
@@ -198,12 +279,12 @@ export const mockStyleTransfer = async (photoFile, onProgress) => {
 
 // Main function
 export const processStyleTransfer = async (photoFile, artwork, apiKey, onProgress) => {
-  // API 시도
+  // v16: XLabs Depth ControlNet 시도
   const result = await applyStyleTransfer(photoFile, artwork, onProgress);
   
-  // 실패시 Mock
+  // 실패시 Mock (무료 티어)
   if (!result.success) {
-    console.warn('API failed, using mock');
+    console.warn('API failed, using mock version');
     return mockStyleTransfer(photoFile, onProgress);
   }
   
