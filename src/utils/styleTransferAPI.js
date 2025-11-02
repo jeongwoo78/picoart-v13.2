@@ -1,7 +1,5 @@
-// Replicate API utility using Vercel Serverless Functions
-// This avoids CORS issues by calling API from server
+// Prompt-based style transfer using SDXL img2img
 
-// Convert image file to base64
 const fileToBase64 = async (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -11,7 +9,6 @@ const fileToBase64 = async (file) => {
   });
 };
 
-// Resize image if needed
 const resizeImage = async (file, maxWidth = 768) => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -42,20 +39,40 @@ const resizeImage = async (file, maxWidth = 768) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Apply style transfer using serverless function
+// 화풍 프롬프트 생성
+const createStylePrompt = (artwork) => {
+  const artist = artwork.artistEn || artwork.artist;
+  const style = artwork.style;
+  
+  // 스타일별 키워드
+  const styleKeywords = {
+    'impressionism': 'impressionist painting, visible brushstrokes, light and color, outdoor scene',
+    'expressionism': 'expressionist painting, bold colors, emotional, distorted forms',
+    'cubism': 'cubist painting, geometric shapes, fragmented, multiple perspectives',
+    'surrealism': 'surrealist painting, dreamlike, imaginative, symbolic',
+    'romanticism': 'romantic painting, dramatic lighting, emotional atmosphere',
+    'baroque': 'baroque painting, dramatic lighting, rich colors, ornate details',
+    'renaissance': 'renaissance painting, realistic, balanced composition, classical beauty',
+    'fauvism': 'fauvist painting, wild colors, bold brushstrokes, simplified forms',
+    'rococo': 'rococo painting, ornate, pastel colors, playful, elegant'
+  };
+  
+  const baseStyle = styleKeywords[style] || 'artistic painting style';
+  
+  return `A painting in the style of ${artist}, ${baseStyle}, masterpiece, high quality, artistic`;
+};
+
+// SDXL로 스타일 변환
 export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
   try {
-    // Resize photo
     const resizedPhoto = await resizeImage(photoFile, 768);
     const photoBase64 = await fileToBase64(resizedPhoto);
     
-    // Get artwork style image URL
-    const artworkPath = `/artworks/${artwork.category}/${artwork.filename}`;
-    const styleImageUrl = `${window.location.origin}${artworkPath}`;
+    const prompt = createStylePrompt(artwork);
     
     if (onProgress) onProgress('서버에 요청 중...');
     
-    // Call serverless function
+    // Serverless function 호출
     const createResponse = await fetch('/api/replicate', {
       method: 'POST',
       headers: {
@@ -63,7 +80,7 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
       },
       body: JSON.stringify({
         image: photoBase64,
-        style_image: styleImageUrl
+        prompt: prompt
       })
     });
     
@@ -73,9 +90,9 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
     
     const prediction = await createResponse.json();
     
-    if (onProgress) onProgress('이미지 처리 중...');
+    if (onProgress) onProgress('그림 생성 중...');
     
-    // Poll for result
+    // 결과 polling
     let result = prediction;
     let attempts = 0;
     const maxAttempts = 60;
@@ -94,7 +111,7 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
       
       if (onProgress) {
         const progress = Math.min(95, 10 + (attempts * 1.5));
-        onProgress(`처리 중... ${Math.floor(progress)}%`);
+        onProgress(`생성 중... ${Math.floor(progress)}%`);
       }
     }
     
@@ -112,7 +129,7 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
       throw new Error('No result image');
     }
     
-    // Fetch image as blob
+    // 이미지 다운로드
     const imageResponse = await fetch(resultUrl);
     const blob = await imageResponse.blob();
     const localUrl = URL.createObjectURL(blob);
@@ -133,7 +150,7 @@ export const applyStyleTransfer = async (photoFile, artwork, onProgress) => {
   }
 };
 
-// Mock for testing
+// Mock (테스트용)
 export const mockStyleTransfer = async (photoFile, onProgress) => {
   return new Promise((resolve) => {
     let progress = 0;
@@ -157,10 +174,10 @@ export const mockStyleTransfer = async (photoFile, onProgress) => {
 
 // Main function
 export const processStyleTransfer = async (photoFile, artwork, apiKey, onProgress) => {
-  // Try real API via serverless function
+  // API 시도
   const result = await applyStyleTransfer(photoFile, artwork, onProgress);
   
-  // Fallback to mock if failed
+  // 실패시 Mock
   if (!result.success) {
     console.warn('API failed, using mock');
     return mockStyleTransfer(photoFile, onProgress);

@@ -1,25 +1,27 @@
 export default async function handler(req, res) {
-  // CORS 헤더 설정
+  // CORS 헤더
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  // OPTIONS 요청 처리
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  // POST 요청만 허용
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { image, style_image } = req.body;
+    const { image, prompt } = req.body;
 
-    // Replicate API 호출
+    if (!image || !prompt) {
+      return res.status(400).json({ error: 'Missing image or prompt' });
+    }
+
+    // Replicate SDXL img2img API 호출
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
@@ -27,16 +29,23 @@ export default async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        version: "854e8727697a057c525cdb45ab037f64ecca770a1769cc52287c2e56472a247b",
+        version: "39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b", // SDXL img2img
         input: {
           image: image,
-          prompt: "a painting",
-          image_resolution: 768,
-          control_strength: 1.5,
-          style_image: style_image
+          prompt: prompt,
+          strength: 0.75,
+          num_inference_steps: 30,
+          guidance_scale: 7.5,
+          scheduler: "K_EULER"
         }
       })
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Replicate API error:', response.status, errorText);
+      throw new Error(`API Error: ${response.status}`);
+    }
 
     const data = await response.json();
     res.status(200).json(data);
